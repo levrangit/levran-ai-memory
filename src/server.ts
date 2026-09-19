@@ -1,5 +1,6 @@
 import { Skybridge } from "skybridge/server";
 import { z } from "zod";
+import { callEnggraphTool } from "./enggraph.js";
 
 export const app = new Skybridge({
   name: "levran-ai-memory",
@@ -31,18 +32,43 @@ export const app = new Skybridge({
             destructiveHint: false,
           },
         },
-        async (input) => ({
-          structuredContent: {
-            status: "not_implemented",
-            memory_id: input.memory_id,
-          },
-          content: [
-            {
-              type: "text",
-              text: "Enggraph connection is the next implementation step.",
-            },
-          ],
-        }),
+        async (input) => {
+          try {
+            const result = await callEnggraphTool("save_memory", input);
+
+            return {
+              structuredContent: {
+                status: "saved",
+                memory_id: input.memory_id,
+                result,
+              },
+              content: [
+                {
+                  type: "text",
+                  text: `Memory saved to Enggraph: ${input.memory_id}`,
+                },
+              ],
+            };
+          } catch (error) {
+            const message =
+              error instanceof Error ? error.message : String(error);
+
+            return {
+              structuredContent: {
+                status: "error",
+                memory_id: input.memory_id,
+                error: message,
+              },
+              content: [
+                {
+                  type: "text",
+                  text: `Failed to save memory to Enggraph: ${message}`,
+                },
+              ],
+              isError: true,
+            };
+          }
+        },
       )
       .registerTool(
         {
@@ -58,19 +84,46 @@ export const app = new Skybridge({
             destructiveHint: false,
           },
         },
-        async (input) => ({
-          structuredContent: {
-            status: "not_implemented",
-            query: input.query,
-            memories: [],
-          },
-          content: [
-            {
-              type: "text",
-              text: "Enggraph connection is the next implementation step.",
-            },
-          ],
-        }),
+        async (input) => {
+          try {
+            const result = await callEnggraphTool("get_memory", {
+              query: input.query,
+              limit: 20,
+            });
+
+            return {
+              structuredContent: {
+                status: "ok",
+                query: input.query,
+                result,
+              },
+              content: [
+                {
+                  type: "text",
+                  text: `Memory search completed for: ${input.query}`,
+                },
+              ],
+            };
+          } catch (error) {
+            const message =
+              error instanceof Error ? error.message : String(error);
+
+            return {
+              structuredContent: {
+                status: "error",
+                query: input.query,
+                error: message,
+              },
+              content: [
+                {
+                  type: "text",
+                  text: `Failed to search Enggraph memory: ${message}`,
+                },
+              ],
+              isError: true,
+            };
+          }
+        },
       ),
 });
 
