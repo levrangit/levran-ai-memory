@@ -125,7 +125,7 @@ export const app = new Skybridge({
           const message = errorMessage(error);
           return { structuredContent: { status: "error", error: message }, content: textContent("Failed to save persistent record: " + message), isError: true };
         }
-      }))
+      })
       .registerTool({
         name: "get_session_context",
         description: "Load persistent project context for the beginning of meaningful work. ChatGPT supplies the stable about value. Returns Memory records, active Plans, and open Suggestions. Read-only; it never writes or deletes records.",
