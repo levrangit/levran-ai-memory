@@ -1,4 +1,5 @@
-import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
 const ENGGRAPH_MCP_URL =
   process.env.ENGGRAPH_MCP_URL ??
