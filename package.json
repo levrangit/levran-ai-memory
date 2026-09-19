@@ -1,0 +1,32 @@
+{
+  "name": "levran-ai-memory",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Skybridge MCP app for persistent ChatGPT memory backed by Enggraph",
+  "type": "module",
+  "scripts": {
+    "dev": "skybridge dev",
+    "build": "skybridge build",
+    "start": "skybridge start"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/client": "^1.20.2",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "skybridge": "^2.0.0",
+    "vite": "^8.1.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@skybridge/devtools": "^2.0.0",
+    "@skybridge/vite-plugin": "^2.0.0",
+    "@types/node": "^24.13.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=24.18.0"
+  }
+}
