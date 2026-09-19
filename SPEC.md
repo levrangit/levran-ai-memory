@@ -2,97 +2,122 @@
 
 ## Purpose
 
-Provide ChatGPT with durable memory between sessions using the user's existing Enggraph installation as the persistent store.
+Provide ChatGPT with durable project and user context between sessions using the user's existing Enggraph installation as the persistent store.
 
-ChatGPT remains the intelligent layer: it decides what information is important enough to remember, when a memory lookup is useful, and which project or scope a memory belongs to.
+ChatGPT is the intelligent layer. It decides what is worth preserving, classifies durable information as Memory / Plan / Suggestion, determines the project scope, and constructs the record. levran-ai-memory is a validation, routing, and storage gateway; it does not inspect conversation semantics.
 
-## Value Proposition
+## Native Enggraph record model
 
-The app should let ChatGPT:
-- automatically preserve durable user preferences, decisions, rules, agreements, constraints, architecture decisions, and other context likely to matter later;
-- assign saved memories to the most appropriate project/scope based on the conversation context;
-- retrieve previously stored context when the user explicitly asks for memory lookup.
+Enggraph already provides three agent-authored persistent record families:
 
-Automatic saving does not require confirmation for every record.
+- **Memory** — durable knowledge such as facts, rules, preferences, constraints, agreements, and decisions.
+- **Plan** — future work, templates, and procedures. Plan type is one of `plan`, `template`, `procedure`; lifecycle status is separate.
+- **Suggestion** — an observed gap, defect, missing capability, or possible improvement. Supported suggestion kinds are `empty-lookup`, `missing-summary`, `thin-summary`, `not-indexed`, `no-parser`, `stale-index`, `missing-tool`; supported levers are `tokens`, `coverage`, `runtime`.
 
-## Memory scope / project classification
+levran-ai-memory must not create a competing taxonomy.
 
-The "about" field is the memory scope.
+## Tool contract: save_record
 
-ChatGPT should determine "about" from the current conversation context before calling save_memory.
+`save_record` is the single write interface exposed to ChatGPT.
 
-Rules:
-- If the memory clearly belongs to a named project, use that project's stable name as "about".
-- Use the same project/scope spelling consistently across memories.
-- If the conversation is clearly about Family Beacon, use "Family_beacon".
-- If the conversation is clearly about Enggraph, use "enggraph".
-- For other projects, use their project name when the context identifies one.
-- For durable personal preferences, global rules, or information that intentionally applies across projects, use "about: *" when supported by Enggraph.
-- If the correct project cannot be determined reliably, omit "about" rather than guessing. Enggraph will apply its normal default scope.
-- Project classification must not be inferred from tags alone; the surrounding conversation context is authoritative.
+Common required fields:
 
-The MCP tool description must explicitly tell ChatGPT to choose "about" from conversation context. The tool itself does not inspect the conversation and therefore must not pretend to perform this classification.
+- `record_type`: exactly `memory`, `plan`, or `suggestion`;
+- `about`: stable project/scope name, or `*` for global personal/cross-project information;
+- `id`: lowercase slug using letters, digits, hyphens, and underscores;
+- `title`;
+- `content`;
+- `tags`: array of semantic retrieval tags; an empty array is valid.
 
-## Product Context
+Plan-only fields:
 
-Existing Enggraph deployment:
+- `plan_type`: `plan`, `template`, or `procedure`;
+- `plan_status`: lifecycle status, normally `active` for new plans.
 
-https://levranio.duckdns.org/mcp/enggraph
+Suggestion-only fields:
 
-The app must not modify Enggraph, Family Beacon, or existing infrastructure automatically.
+- `suggestion_kind`: optional supported Enggraph kind;
+- `lever`: optional supported Enggraph lever;
+- `suggestion_status`: `open`, `resolved`, or `wontfix`; defaults to `open`.
 
-No automatic deletion of memories.
+The gateway validates the record and routes it to the corresponding Enggraph operation:
 
-## UX Flows
+- memory → `save_memory`
+- plan → `save_plan`
+- suggestion → `save_suggestion`
 
-### Automatic memory save
-1. Normal ChatGPT conversation.
-2. ChatGPT identifies durable information important enough to remember.
-3. ChatGPT determines the appropriate "about" scope from the conversation context.
-4. ChatGPT calls save_memory, passing "about" when the scope is known.
-5. Enggraph stores the memory.
-6. Conversation continues normally.
+The gateway must not reinterpret a record or silently invent missing semantic values.
 
-### Explicit memory retrieval
-1. User says: «посмотри через плагин памяти …».
-2. ChatGPT identifies the topic and relevant project/scope from the conversation context.
-3. ChatGPT calls search_memory.
-4. Enggraph returns relevant memories.
-5. ChatGPT uses the retrieved context in its answer.
+## When ChatGPT should save
 
-## UI
+Save only information with durable value beyond the current turn.
 
-The first version is tool-only. No custom React view is required.
+Save Memory for permanent rules, durable preferences, constraints, agreements, important facts, accepted architectural decisions, and stable project conventions.
 
-## Tools
+Save Plan for concrete future work, execution roadmaps, reusable templates, and procedures.
 
-### save_memory
+Save Suggestion for discovered gaps, defects, missing capabilities, technical debt, risks, and possible improvements that are not yet accepted decisions or plans.
+
+Do not save routine conversation, transient debugging output, temporary actions, one-off requests, or statements with no durable future value.
+
+One conversation statement normally produces at most one record. Do not create multiple records merely because one sentence contains several related ideas.
+
+## Ambiguity rule
+
+If ChatGPT cannot confidently distinguish Memory / Plan / Suggestion and the user has not explicitly selected the type, do not call `save_record`.
+
+If the user explicitly says remember this, save as a plan, or record this as a suggestion, follow that instruction.
+
+If `about` cannot be determined reliably, do not call `save_record`.
+
+## About classification
+
+ChatGPT determines `about` from the surrounding conversation context.
+
+Examples: Family Beacon → `Family_beacon`; Enggraph → `enggraph`; levran-ai-memory → `levran-ai-memory`; durable personal or cross-project information → `*`.
+
+Tags must never be used to infer `about`.
+
+## Tags
+
+Use 2-5 short semantic tags when they materially improve retrieval. Do not invent tags merely to reach a count. Empty tags are valid.
+
+## Tool contract: get_session_context
+
+`get_session_context` is read-only and loads the native Enggraph context needed at the beginning of meaningful project work.
 
 Input:
-- memory_id
-- title
-- text
-- optional summary
-- optional tags
-- optional about
 
-Behavior:
-- ChatGPT chooses "about" from the conversation context when a project/scope is identifiable.
-- Forward the memory and selected scope to Enggraph's save_memory operation.
-- Do not invent a project solely to avoid leaving "about" empty.
+- `about`: stable project/scope name;
+- `limit`: optional per-family limit from 1 to 20, default 20.
 
-### search_memory
+Output:
 
-Input:
-- query
+```json
+{
+  "status": "ok",
+  "about": "enggraph",
+  "memories": [],
+  "plans": [],
+  "suggestions": []
+}
+```
 
-Behavior: search Enggraph memory using get_memory and return relevant results to the model.
+The tool retrieves Memory records for the scope, active Plans for the scope, and open Suggestions for the scope.
+
+ChatGPT should call it at the beginning of a meaningful work session when persistent context could affect the work. It should not be called for trivial conversation.
+
+## Explicit memory lookup
+
+When the user explicitly asks to look through the memory plugin, for example «посмотри через плагин памяти ...», ChatGPT should use `search_memory` with the relevant query and `about` when the scope is known.
+
+ChatGPT must not claim to remember persistent information that was not retrieved or is not present in the current conversation.
 
 ## Architecture
 
 ChatGPT
    ↓
-Levran AI Memory MCP App
+levran-ai-memory MCP app
    ↓
 https://levranio.duckdns.org/mcp/enggraph
    ↓
@@ -106,15 +131,15 @@ PostgreSQL
 - Never modify the existing Enggraph deployment without direct user permission.
 - Never delete memories automatically.
 - Keep secrets out of source control.
-- Never guess a project scope when the conversation does not establish it reliably.
+- Never guess a project scope.
+- Never invent an Enggraph suggestion kind or lever.
+- Never silently convert an ambiguous record into another record type.
 
 ## Success Criteria
 
-- The app starts locally.
-- ChatGPT can invoke save_memory.
-- ChatGPT can invoke search_memory.
-- Memories persist in Enggraph between sessions.
-- ChatGPT supplies the appropriate "about" scope for project-specific memories when the conversation identifies the project.
-- Global memories can be explicitly stored with "about: *".
-- The phrase «посмотри через плагин памяти …» can trigger retrieval.
-- No per-record confirmation is required.
+- ChatGPT can call `save_record` for all three native record families.
+- ChatGPT can call `get_session_context` and receive Memory + active Plans + open Suggestions.
+- ChatGPT can explicitly retrieve memories with `search_memory`.
+- Records persist in Enggraph between sessions.
+- The model does the semantic classification; the gateway only validates and routes.
+- Ambiguous records are not silently saved under the wrong type.
