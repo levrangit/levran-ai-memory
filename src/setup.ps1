@@ -91,21 +91,20 @@ function Validate-SourceId {
         return $false
     }
 
-    Get-ChildItem -LiteralPath $DatabasesDir -Filter '*.json' -File -Recurse -ErrorAction SilentlyContinue |
-        ForEach-Object {
-            try {
-                $j = Read-JsonFile -Path $_.FullName
-                if ($null -ne $j -and [string]$j.db_source_id -eq $Id) {
-                    Write-Host ''
-                    Write-Host "ОШИБКА: DB_SOURCE_ID "$Id" уже используется:" -ForegroundColor Red
-                    Write-Host $_.FullName -ForegroundColor Yellow
-                    return $false
-                }
-            }
-            catch {
-                # Пропускаем поврежденный/невалидный JSON и продолжаем проверку.
+    foreach ($file in (Get-ChildItem -LiteralPath $DatabasesDir -Filter '*.json' -File -Recurse -ErrorAction SilentlyContinue)) {
+        try {
+            $j = Read-JsonFile -Path $file.FullName
+            if ($null -ne $j -and [string]$j.db_source_id -eq $Id) {
+                Write-Host ''
+                Write-Host "ОШИБКА: DB_SOURCE_ID '$Id' уже используется:" -ForegroundColor Red
+                Write-Host $file.FullName -ForegroundColor Yellow
+                return $false
             }
         }
+        catch {
+            # Пропускаем поврежденный/невалидный JSON и продолжаем проверку.
+        }
+    }
 
     return $true
 }
@@ -126,7 +125,7 @@ function Terminal-Setup {
 
     if (-not (Test-Path -LiteralPath ($RdpDrive + '\'))) {
         Write-Host ''
-        Write-Host "ВНИМАНИЕ: путь "$RdpDrive" сейчас недоступен." -ForegroundColor Yellow
+        Write-Host "ВНИМАНИЕ: путь '$RdpDrive' сейчас недоступен." -ForegroundColor Yellow
         Write-Host 'Проверьте, что RDP-диск подключен.'
         Write-Host ''
         $confirm = Read-Host 'Сохранить этот путь всё равно? [Y/N]'
@@ -167,14 +166,14 @@ function Terminal-Setup {
                 New-Item -ItemType Directory -Force -Path $McpWork | Out-Null
             }
             catch {
-                Write-Host "Не удалось создать "$McpWork"." -ForegroundColor Red
+                Write-Host "Не удалось создать '$McpWork'." -ForegroundColor Red
                 return
             }
         }
     }
 
     if (-not (Test-Path -LiteralPath ($McpWork + '\'))) {
-        Write-Host "Рабочий каталог не найден: "$McpWork"" -ForegroundColor Red
+        Write-Host "Рабочий каталог не найден: '$McpWork'" -ForegroundColor Red
         return
     }
 
