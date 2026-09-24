@@ -162,6 +162,13 @@ if not defined DB_SOURCE_ID (
     goto MENU
 )
 
+echo(%DB_SOURCE_ID%| findstr /r /x "[A-Za-z0-9][A-Za-z0-9_-]*" >nul
+if errorlevel 1 (
+    echo Некорректный DB_SOURCE_ID.
+    echo Разрешены только латинские буквы, цифры, "_" и "-".
+    goto MENU
+)
+
 call :ValidateSourceId "%DB_SOURCE_ID%"
 if errorlevel 1 goto MENU
 
@@ -331,4 +338,4 @@ exit /b 0
 
 :END
 endlocal
-.
+exit /b 0
