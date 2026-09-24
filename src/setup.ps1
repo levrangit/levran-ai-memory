@@ -1,3 +1,4 @@
+# curl.exe -L "https://raw.githubusercontent.com/levrangit/levran-ai-memory/main/src/setup.ps1" -o ".\setup.ps1"
 ﻿#requires -Version 5.1
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $ErrorActionPreference = 'Stop'
