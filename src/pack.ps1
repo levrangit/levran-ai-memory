@@ -32,7 +32,7 @@ foreach ($dbFile in $dbFiles) {
     $db = Get-Content -Raw -LiteralPath $dbFile.FullName -Encoding UTF8 | ConvertFrom-Json
     $id = [string]$db.db_source_id
     $dumpRoot = Join-Path $dumpDir $id
-    if (-not (Test-Path -LiteralPath $dumpRoot -PathType Container)) { throw "Не найден dump для $id: $dumpRoot" }
+    if (-not (Test-Path -LiteralPath $dumpRoot -PathType Container)) { throw "Не найден dump для ${id}: $dumpRoot" }
 
     $items = @(Get-ChildItem -LiteralPath $dumpRoot -Force)
     if ($items.Count -eq 0) { throw "Dump пуст: $dumpRoot" }
