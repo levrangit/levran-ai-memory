@@ -87,10 +87,18 @@ function Invoke-OneCDump {
     Write-Log "Источник: $source" $LogPath
     Write-Log "Каталог: $OutputPath" $LogPath
 
+    # 1cv8.exe с /DumpConfigToFiles запускает фактическую выгрузку асинхронно:
+    # родительский процесс может завершиться раньше дочернего процесса.
+    # Поэтому /Out нельзя направлять в тот же файл, который пишет PowerShell.
+    $logDirectory = Split-Path -Parent $LogPath
+    $oneCLogPath = Join-Path $logDirectory ("1cv8_{0}_{1}.log" -f (Get-Date -Format 'yyyyMMdd_HHmmss_fff'), ([guid]::NewGuid().ToString('N').Substring(0,8)))
+
+    Write-Log "Лог 1cv8.exe: $oneCLogPath" $LogPath
+
     if ([string]::IsNullOrWhiteSpace($ExtensionName)) {
-        & $OneCExe DESIGNER /S $source /N $User /P $Password /DisableStartupDialogs /DumpConfigToFiles $OutputPath /Out $LogPath
+        & $OneCExe DESIGNER /S $source /N $User /P $Password /DisableStartupDialogs /DumpConfigToFiles $OutputPath /Out $oneCLogPath
     } else {
-        & $OneCExe DESIGNER /S $source /N $User /P $Password /DisableStartupDialogs /DumpConfigToFiles $OutputPath -Extension $ExtensionName /Out $LogPath
+        & $OneCExe DESIGNER /S $source /N $User /P $Password /DisableStartupDialogs /DumpConfigToFiles $OutputPath -Extension $ExtensionName /Out $oneCLogPath
     }
 
     $exitCode = $LASTEXITCODE
