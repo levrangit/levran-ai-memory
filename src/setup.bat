@@ -1,4 +1,5 @@
-@echo off
+﻿@echo off
+chcp 65001 >nul
 setlocal EnableExtensions DisableDelayedExpansion
 title MCP - Setup
 
@@ -306,25 +307,19 @@ exit /b 0
 set "CHECK_ID=%~1"
 if not defined CHECK_ID exit /b 1
 
-for /f "usebackq delims=" %%A in (`powershell.exe -NoProfile -Command "$id=[Environment]::GetEnvironmentVariable('CHECK_ID'); $files=Get-ChildItem -LiteralPath '%DATABASES_DIR%' -Filter '*.json' -File -Recurse -ErrorAction SilentlyContinue; foreach($f in $files){try{$j=Get-Content -Raw -LiteralPath $f.FullName|ConvertFrom-Json;if($j.db_source_id -eq $id){$f.FullName; exit 10}}catch{}}"`) do (
+powershell.exe -NoProfile -Command "$id=$env:CHECK_ID; $files=Get-ChildItem -LiteralPath $env:DATABASES_DIR -Filter '*.json' -File -Recurse -ErrorAction SilentlyContinue; foreach($f in $files){try{$j=Get-Content -Raw -LiteralPath $f.FullName|ConvertFrom-Json;if($j.db_source_id -eq $id){Write-Output $f.FullName; exit 10}}catch{}}" > "%TEMP%\mcp_source_check.txt"
+if errorlevel 1 (
     echo.
     echo ОШИБКА: DB_SOURCE_ID "%CHECK_ID%" уже используется:
-    echo %%A
+    type "%TEMP%\mcp_source_check.txt"
     echo.
+    del "%TEMP%\mcp_source_check.txt" >nul 2>&1
     exit /b 1
 )
-
+del "%TEMP%\mcp_source_check.txt" >nul 2>&1
 exit /b 0
 
 :SaveDatabase
-set "EXT_JSON="
-for %%E in ("%EXTENSIONS:|=" "%") do (
-    if defined EXT_JSON (
-        set "EXT_JSON=%EXT_JSON%,"
-    )
-    set "EXT_JSON=%EXT_JSON%"%%~E""
-)
-
 set "DB_JSON=%DATABASE_DIR%\%DB_SOURCE_ID%.json"
 set "EXT_JSON=%EXTENSIONS%"
 
