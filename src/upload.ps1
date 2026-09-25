@@ -65,7 +65,7 @@ foreach ($dbFile in $dbFiles) {
     $dumpRoot = Join-Path $dumpDir $id
 
     if (-not (Test-Path -LiteralPath $dumpRoot -PathType Container)) {
-        throw "Не найден локальный dump для $id: $dumpRoot"
+        throw "Не найден локальный dump для ${id}: $dumpRoot"
     }
 
     $items = @(Get-ChildItem -LiteralPath $dumpRoot -Force)
