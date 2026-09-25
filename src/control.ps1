@@ -6,7 +6,7 @@ $targetFiles = [int](Read-Host "Введите общее количество �
 
 if ($targetFiles -le 0) {
     Write-Host "Количество файлов должно быть больше 0."
-    .
+    exit 1
 }
 
 Write-Host ""
@@ -139,4 +139,3 @@ while ($true) {
 
     Start-Sleep -Seconds 1
 }
-.
