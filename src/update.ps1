@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 # Если PowerShell запрещает запуск скрипта, выполните:
 # Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 # Проверить текущую политику:
