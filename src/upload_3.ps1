@@ -32,7 +32,7 @@ if ([string]::IsNullOrWhiteSpace($mcpWork)) { throw "В конфигурации
 $dumpDir = Join-Path $mcpWork 'dump'
 if (-not (Test-Path -LiteralPath $dumpDir -PathType Container)) { throw "Локальный каталог dump не найден: $dumpDir" }
 
-$fastCopy = Join-Path (Join-Path (Join-Path $rdpMcp 'tools') 'FastCopy') 'FastCopy5.12.0_x64\FastCopy.exe'
+$fastCopy = Join-Path $rdpMcp 'tools\FastCopy\FastCopy.exe'
 if (-not (Test-Path -LiteralPath $fastCopy -PathType Leaf)) { throw "FastCopy.exe не найден: $fastCopy" }
 
 function Get-DumpStatistics {
