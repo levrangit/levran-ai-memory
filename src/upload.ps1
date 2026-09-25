@@ -82,7 +82,9 @@ foreach ($dbFile in $dbFiles) {
     Write-Host "  TO:   $destination"
 
     # Передаём все подготовленные файлы напрямую, без 7z.
-    & $rclone 'copy' $dumpRoot $destination '--progress'
+    # --progress отображает общий объём, количество файлов, скорость и ETA.
+    # --stats делает обновление прогресса регулярным и хорошо читаемым в PowerShell 5.1.
+    & $rclone 'copy' $dumpRoot $destination '--progress' '--stats=5s' '--stats-one-line'
     $rc = $LASTEXITCODE
 
     if ($rc -ne 0) {
