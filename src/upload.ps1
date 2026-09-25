@@ -96,6 +96,8 @@ function Start-RcloneCopyWithProgress {
     if (-not $process.Start()) { throw "Не удалось запустить rclone." }
     $previousBytes = 0
     $lastLineLength = 0
+    $spinner = @('\','|','/','-')
+    $spinnerIndex = 0
     while (-not $process.HasExited) {
         Start-Sleep -Seconds 5
         $current = Get-DumpStatistics $Destination
@@ -108,7 +110,9 @@ function Start-RcloneCopyWithProgress {
         $deltaBytes = $current.TotalBytes - $previousBytes
         $speed = 0
         if ($deltaBytes -gt 0) { $speed = [int64]($deltaBytes / 5) }
-        $line = "  [$bar] {0,6:N2}%  {1} / {2}  {3}/с  {4}" -f $percent,(Format-Bytes $current.TotalBytes),(Format-Bytes $totalBytes),(Format-Bytes $speed),$elapsed.ToString('hh\:mm\:ss')
+        $spin = $spinner[$spinnerIndex]
+        $spinnerIndex = ($spinnerIndex + 1) % $spinner.Count
+        $line = "  $spin [$bar] {0,6:N2}%  {1} / {2}  {3}/с  {4}" -f $percent,(Format-Bytes $current.TotalBytes),(Format-Bytes $totalBytes),(Format-Bytes $speed),$elapsed.ToString('hh\:mm\:ss')
         if ($line.Length -lt $lastLineLength) { $line += (' ' * ($lastLineLength - $line.Length)) }
         Write-Host (([char]13).ToString() + $line) -NoNewline
         $lastLineLength = $line.Length
