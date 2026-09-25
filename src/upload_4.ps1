@@ -89,10 +89,10 @@ foreach ($dbFile in $dbFiles) {
     Write-Host "  blitcp: $blitcp"
     Write-Host "  FROM:   $dumpRoot"
     Write-Host "  TO:     $destination"
-    Write-Host "  Режим:  incremental + verify + small-files parallel"
+    Write-Host "  Режим:  incremental + no-verify + no-cache + small-files parallel"
     Write-Host ""
 
-    & $blitcp -p --small-files parallel --threads 16 $dumpRoot $destination
+    & $blitcp -p --no-verify --no-cache --small-files parallel --threads 16 $dumpRoot $destination
     $rc = $LASTEXITCODE
 
     Write-Host ""
