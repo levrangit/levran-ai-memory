@@ -78,6 +78,10 @@ function Format-Bytes {
 function Start-RcloneCopyWithProgress {
     param([string]$Rclone,[string]$Source,[string]$Destination)
     $started = Get-Date
+    $sourceStats = Get-DumpStatistics $Source
+    $totalBytes = $sourceStats.TotalBytes
+    $totalFiles = $sourceStats.Count
+    $barWidth = 40
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = $Rclone
     $psi.Arguments = 'copy "' + $Source + '" "' + $Destination + '" --verbose'
@@ -87,28 +91,40 @@ function Start-RcloneCopyWithProgress {
     $process.StartInfo = $psi
     Write-Host "  Запуск rclone..."
     Write-Host "  Контроль назначения: $Destination"
-    Write-Host "  Интервал контроля: 5 сек."
+    Write-Host ("  Всего: {0:N0} файлов, {1}" -f $totalFiles,(Format-Bytes $totalBytes))
     Write-Host ""
     if (-not $process.Start()) { throw "Не удалось запустить rclone." }
-    $previous = Get-DumpStatistics $Destination
+    $previousBytes = 0
+    $lastLineLength = 0
     while (-not $process.HasExited) {
         Start-Sleep -Seconds 5
         $current = Get-DumpStatistics $Destination
         $elapsed = (Get-Date) - $started
-        $deltaBytes = $current.TotalBytes - $previous.TotalBytes
-        $deltaFiles = $current.Count - $previous.Count
+        if ($totalBytes -gt 0) { $percent = [math]::Min(100,[math]::Max(0,($current.TotalBytes * 100.0 / $totalBytes))) }
+        elseif ($totalFiles -gt 0) { $percent = [math]::Min(100,($current.Count * 100.0 / $totalFiles)) }
+        else { $percent = 100 }
+        $filled = [int][math]::Floor($barWidth * $percent / 100)
+        $bar = ('|' * $filled) + ('.' * ($barWidth - $filled))
+        $deltaBytes = $current.TotalBytes - $previousBytes
         $speed = 0
         if ($deltaBytes -gt 0) { $speed = [int64]($deltaBytes / 5) }
-        Write-Host ("[{0}] Файлов: {1:N0}; размер: {2}; за 5 сек: +{3:N0} файлов / +{4}; скорость: {5}/с; прошло: {6}" -f (Get-Date -Format 'HH:mm:ss'),$current.Count,(Format-Bytes $current.TotalBytes),$deltaFiles,(Format-Bytes $deltaBytes),(Format-Bytes $speed),$elapsed.ToString('hh\:mm\:ss'))
-        if ($null -ne $current.LastWrite) { Write-Host ("    Последнее изменение: {0}" -f $current.LastWrite) }
-        $previous = $current
+        $line = "  [$bar] {0,6:N2}%  {1} / {2}  {3}/с  {4}" -f $percent,(Format-Bytes $current.TotalBytes),(Format-Bytes $totalBytes),(Format-Bytes $speed),$elapsed.ToString('hh\:mm\:ss')
+        if ($line.Length -lt $lastLineLength) { $line += (' ' * ($lastLineLength - $line.Length)) }
+        Write-Host (([char]13).ToString() + $line) -NoNewline
+        $lastLineLength = $line.Length
+        $previousBytes = $current.TotalBytes
     }
     $process.WaitForExit()
     $final = Get-DumpStatistics $Destination
     $elapsed = (Get-Date) - $started
-    Write-Host ""
+    if ($totalBytes -gt 0) { $finalPercent = [math]::Min(100,($final.TotalBytes * 100.0 / $totalBytes)) } else { $finalPercent = 100 }
+    $filled = [int][math]::Floor($barWidth * $finalPercent / 100)
+    $bar = ('|' * $filled) + ('.' * ($barWidth - $filled))
+    $finalLine = "  [$bar] {0,6:N2}%  {1} / {2}  завершено за {3}" -f $finalPercent,(Format-Bytes $final.TotalBytes),(Format-Bytes $totalBytes),$elapsed.ToString('hh\:mm\:ss')
+    if ($finalLine.Length -lt $lastLineLength) { $finalLine += (' ' * ($lastLineLength - $finalLine.Length)) }
+    Write-Host (([char]13).ToString() + $finalLine)
+    Write-Host ("  Файлов: {0:N0} / {1:N0}" -f $final.Count,$totalFiles)
     Write-Host ("  rclone завершён. EXIT CODE: {0}" -f $process.ExitCode)
-    Write-Host ("  Итог: файлов={0:N0}; размер={1}; время={2}" -f $final.Count,(Format-Bytes $final.TotalBytes),$elapsed.ToString('hh\:mm\:ss'))
     return $process.ExitCode
 }
 $dbDir = Join-Path (Join-Path $configDir 'databases') $computer
