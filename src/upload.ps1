@@ -70,7 +70,44 @@ function Format-Bytes {
 
 $totalBytes = [int64](($archiveFiles | Measure-Object -Property Length -Sum).Sum)
 $archiveDestination = Join-Path $rdpMcp 'archive'
+$controlDestination = Join-Path $rdpMcp 'control'
 New-Item -ItemType Directory -Force -Path $archiveDestination | Out-Null
+New-Item -ItemType Directory -Force -Path $controlDestination | Out-Null
+
+# Создаём control.json до начала передачи.
+$sevenZipFiles = @($archiveFiles | Where-Object { $_.Extension -eq '.7z' })
+if ($sevenZipFiles.Count -eq 0) {
+    throw "В каталоге archive нет архивов .7z: $archiveDir"
+}
+
+$manifestArchives = @(
+    foreach ($file in $sevenZipFiles) {
+        [PSCustomObject]@{
+            Name       = $file.Name
+            Length     = [int64]$file.Length
+            SizeBytes  = [int64]$file.Length
+            Sha256File = ($file.Name + '.sha256')
+        }
+    }
+)
+
+$manifest = [PSCustomObject]@{
+    Version = 1
+    CreatedAt = (Get-Date).ToString('o')
+    SourceArchiveDirectory = $archiveDir
+    ArchiveCount = $manifestArchives.Count
+    Sha256Count = $manifestArchives.Count
+    TotalArchiveBytes = [int64](($sevenZipFiles | Measure-Object -Property Length -Sum).Sum)
+    Archives = $manifestArchives
+}
+
+$controlJson = Join-Path $controlDestination 'control.json'
+$manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $controlJson -Encoding UTF8
+
+Write-Host ""
+Write-Host "Контрольный файл создан: $controlJson"
+Write-Host ("Архивов: {0:N0}" -f $manifest.ArchiveCount)
+Write-Host ("Размер архивов: {0}" -f (Format-Bytes $manifest.TotalArchiveBytes))
 
 Write-Host ""
 Write-Host "Архивов для передачи: $($archiveFiles.Count)"
