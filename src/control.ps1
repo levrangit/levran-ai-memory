@@ -1,156 +1,135 @@
 ﻿#Requires -Version 5.1
 
-$path = Read-Host "Введите путь к папке назначения"
+$ErrorActionPreference = 'Stop'
 
-$targetArchives = [int](Read-Host "Введите общее количество архивов (.7z) в источнике")
+$path = 'L:\!work\RAU_IT\MCP'
+$controlPath = Join-Path $path 'control\control.json'
 
-if ($targetArchives -le 0) {
-    Write-Host "Количество архивов должно быть больше 0."
-    exit 1
+if (-not (Test-Path -LiteralPath $path -PathType Container)) { throw "Папка назначения не найдена: $path" }
+if (-not (Test-Path -LiteralPath $controlPath -PathType Leaf)) { throw "Не найден контрольный файл: $controlPath" }
+
+$control = Get-Content -Raw -LiteralPath $controlPath -Encoding UTF8 | ConvertFrom-Json
+$targetArchives = [int]$control.ArchiveCount
+$targetSha256 = [int]$control.Sha256Count
+$targetBytes = [int64]$control.TotalArchiveBytes
+if ($targetArchives -le 0) { throw "В control.json ArchiveCount должен быть больше 0." }
+if ($targetBytes -le 0) { throw "В control.json TotalArchiveBytes должен быть больше 0." }
+
+$expected = @($control.Archives)
+if ($expected.Count -ne $targetArchives) { throw "Количество Archives в control.json не совпадает с ArchiveCount." }
+
+$archiveDir = Join-Path $path 'archive'
+if (-not (Test-Path -LiteralPath $archiveDir -PathType Container)) {
+    New-Item -ItemType Directory -Force -Path $archiveDir | Out-Null
 }
 
-if (-not (Test-Path -LiteralPath $path -PathType Container)) {
-    Write-Host "Папка назначения не найдена: $path"
-    exit 1
+function Format-Bytes {
+    param([int64]$Bytes)
+    if ($Bytes -ge 1TB) { return ("{0:N2} TB" -f ($Bytes / 1TB)) }
+    if ($Bytes -ge 1GB) { return ("{0:N2} GB" -f ($Bytes / 1GB)) }
+    if ($Bytes -ge 1MB) { return ("{0:N2} MB" -f ($Bytes / 1MB)) }
+    if ($Bytes -ge 1KB) { return ("{0:N2} KB" -f ($Bytes / 1KB)) }
+    return ("{0} B" -f $Bytes)
 }
 
-Write-Host ""
-Write-Host "Контроль получения архивов..."
-Write-Host "Учитываются только файлы *.7z."
-Write-Host "Файлы *.sha256 контролируются отдельно."
-Write-Host "Для остановки нажмите Ctrl+C."
+Write-Host "------------------------------------------------------------"
+Write-Host "MCP - CONTROL"
+Write-Host "------------------------------------------------------------"
+Write-Host "Каталог: $path"
+Write-Host "Контрольный файл: $controlPath"
+Write-Host ("Ожидается архивов: {0:N0}" -f $targetArchives)
+Write-Host ("Ожидается SHA256: {0:N0}" -f $targetSha256)
+Write-Host ("Ожидаемый размер: {0}" -f (Format-Bytes $targetBytes))
 Write-Host ""
 
 $startTime = Get-Date
-$previousCount = 0
-$previousBytes = 0
+$previousBytes = [int64]0
 $previousTime = $startTime
-
-$averageArchivesPerSec = 0
 $averageBytesPerSec = 0
 
 while ($true) {
-    $archives = @(Get-ChildItem -LiteralPath $path -Filter "*.7z" -File -ErrorAction SilentlyContinue)
+    $receivedBytes = [int64]0
+    $receivedArchives = 0
+    $completeArchives = 0
 
-    $count = $archives.Count
-    $bytes = ($archives | Measure-Object Length -Sum).Sum
-
-    if ($null -eq $bytes) {
-        $bytes = 0
+    foreach ($item in $expected) {
+        $filePath = Join-Path $archiveDir ([string]$item.Name)
+        if (Test-Path -LiteralPath $filePath -PathType Leaf) {
+            $file = Get-Item -LiteralPath $filePath
+            $receivedArchives++
+            $receivedBytes += [int64]$file.Length
+            if ([int64]$file.Length -eq [int64]$item.SizeBytes) { $completeArchives++ }
+        }
     }
 
-    $shaFiles = @(Get-ChildItem -LiteralPath $path -Filter "*.sha256" -File -ErrorAction SilentlyContinue)
-    $shaCount = $shaFiles.Count
-
+    $shaCount = @(Get-ChildItem -LiteralPath $archiveDir -Filter '*.sha256' -File -ErrorAction SilentlyContinue).Count
     $now = Get-Date
     $deltaSeconds = ($now - $previousTime).TotalSeconds
 
     if ($deltaSeconds -gt 0) {
-        $deltaArchives = $count - $previousCount
-        $deltaBytes = $bytes - $previousBytes
-
-        $currentArchivesPerSec = $deltaArchives / $deltaSeconds
+        $deltaBytes = $receivedBytes - $previousBytes
         $currentBytesPerSec = $deltaBytes / $deltaSeconds
-
-        if ($averageArchivesPerSec -eq 0) {
-            $averageArchivesPerSec = $currentArchivesPerSec
-        }
-        else {
-            $averageArchivesPerSec = ($averageArchivesPerSec * 0.8) + ($currentArchivesPerSec * 0.2)
-        }
-
-        if ($averageBytesPerSec -eq 0) {
-            $averageBytesPerSec = $currentBytesPerSec
-        }
-        else {
-            $averageBytesPerSec = ($averageBytesPerSec * 0.8) + ($currentBytesPerSec * 0.2)
+        if ($currentBytesPerSec -gt 0) {
+            if ($averageBytesPerSec -eq 0) {
+                $averageBytesPerSec = $currentBytesPerSec
+            }
+            else {
+                $averageBytesPerSec = ($averageBytesPerSec * 0.8) + ($currentBytesPerSec * 0.2)
+            }
         }
     }
 
-    $previousCount = $count
-    $previousBytes = $bytes
+    $previousBytes = $receivedBytes
     $previousTime = $now
 
-    $percent = ($count / $targetArchives) * 100
-
-    if ($percent -gt 100) {
-        $percent = 100
-    }
+    $percent = ($receivedBytes / $targetBytes) * 100
+    if ($percent -gt 100) { $percent = 100 }
 
     $barLength = 40
     $filled = [int][Math]::Floor(($percent / 100) * $barLength)
-
-    if ($filled -gt $barLength) {
-        $filled = $barLength
-    }
-
-    if ($filled -lt 0) {
-        $filled = 0
-    }
-
-    $empty = $barLength - $filled
-    $progressBar = ("█" * $filled) + ("░" * $empty)
+    if ($filled -gt $barLength) { $filled = $barLength }
+    if ($filled -lt 0) { $filled = 0 }
+    $progressBar = ('█' * $filled) + ('░' * ($barLength - $filled))
 
     $elapsedSeconds = ($now - $startTime).TotalSeconds
-
     if ($elapsedSeconds -gt 0) {
-        $archivesPerMin = $count / $elapsedSeconds * 60
-        $mbPerMin = ($bytes / 1MB) / $elapsedSeconds * 60
+        $mbPerMin = ($receivedBytes / 1MB) / $elapsedSeconds * 60
     }
     else {
-        $archivesPerMin = 0
         $mbPerMin = 0
     }
 
-    $remainingArchives = $targetArchives - $count
+    $remainingBytes = $targetBytes - $receivedBytes
+    if ($remainingBytes -lt 0) { $remainingBytes = 0 }
 
-    if ($remainingArchives -lt 0) {
-        $remainingArchives = 0
-    }
-
-    if ($averageArchivesPerSec -gt 0 -and $remainingArchives -gt 0) {
-        $remainingSeconds = $remainingArchives / $averageArchivesPerSec
+    if ($averageBytesPerSec -gt 0 -and $remainingBytes -gt 0) {
+        $remainingSeconds = $remainingBytes / $averageBytesPerSec
         $remainingTime = [TimeSpan]::FromSeconds($remainingSeconds)
-        $finishTime = $now.AddSeconds($remainingSeconds)
-
         $remainingText = "{0} ч {1} мин" -f [int]$remainingTime.TotalHours, $remainingTime.Minutes
-        $finishText = $finishTime.ToString("HH:mm:ss")
+        $finishText = $now.AddSeconds($remainingSeconds).ToString("HH:mm:ss")
     }
-    elseif ($count -ge $targetArchives -and $shaCount -ge $targetArchives) {
-        $remainingText = "ЗАВЕРШЕНО"
+    elseif ($receivedBytes -ge $targetBytes -and $completeArchives -eq $targetArchives -and $shaCount -ge $targetSha256) {
+        $remainingText = 'ЗАВЕРШЕНО'
         $finishText = $now.ToString("HH:mm:ss")
     }
-    elseif ($count -ge $targetArchives) {
-        $remainingText = "ожидание SHA256"
-        $finishText = "--:--:--"
+    elseif ($receivedBytes -ge $targetBytes) {
+        $remainingText = 'проверка файлов'
+        $finishText = '--:--:--'
     }
     else {
-        $remainingText = "расчёт..."
-        $finishText = "--:--:--"
+        $remainingText = 'расчёт...'
+        $finishText = '--:--:--'
     }
 
-    $line = "[{0}] [{1}] {2,6:N2}% | Архивов: {3:N0}/{4:N0} | Размер: {5:N2} MB | {6:N1} архивов/мин | {7:N1} MB/мин | SHA256: {8:N0} | Осталось: {9} | Конец: {10}" -f `
-        $now.ToString("HH:mm:ss"), `
-        $progressBar, `
-        $percent, `
-        $count, `
-        $targetArchives, `
-        ($bytes / 1MB), `
-        $archivesPerMin, `
-        $mbPerMin, `
-        $shaCount, `
-        $remainingText, `
-        $finishText
+    $line = "[{0}] [{1}] {2,6:N2}% | Файлов: {3:N0}/{4:N0} | Полных: {5:N0}/{4:N0} | Размер: {6} / {7} | {8:N1} MB/мин | SHA256: {9:N0}/{10:N0} | Осталось: {11} | Конец: {12}" -f $now.ToString("HH:mm:ss"), $progressBar, $percent, $receivedArchives, $targetArchives, $completeArchives, (Format-Bytes $receivedBytes), (Format-Bytes $targetBytes), $mbPerMin, $shaCount, $targetSha256, $remainingText, $finishText
+    Write-Host $line
 
-    Write-Host "`r$line" -NoNewline
-
-    if ($count -ge $targetArchives -and $shaCount -ge $targetArchives) {
+    if ($receivedBytes -ge $targetBytes -and $completeArchives -eq $targetArchives -and $shaCount -ge $targetSha256) {
         Write-Host ""
-        Write-Host ""
-        Write-Host "Получение архивов и SHA256 завершено."
-        Write-Host ("Архивов .7z: {0:N0}" -f $count)
-        Write-Host ("Файлов .sha256: {0:N0}" -f $shaCount)
-        Write-Host ("Размер архивов: {0:N2} MB" -f ($bytes / 1MB))
+        Write-Host "Получение архивов завершено."
+        Write-Host ("Архивов: {0:N0}/{1:N0}" -f $completeArchives, $targetArchives)
+        Write-Host ("SHA256: {0:N0}/{1:N0}" -f $shaCount, $targetSha256)
+        Write-Host ("Размер: {0}" -f (Format-Bytes $receivedBytes))
         Write-Host ("Время завершения: {0}" -f $now.ToString("HH:mm:ss"))
         break
     }
