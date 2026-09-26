@@ -115,7 +115,8 @@ while ($true) {
     $progressBar = ('█' * $filled) + ('░' * ($barLength - $filled))
     $elapsedSeconds = ($now - $startTime).TotalSeconds
     $mbPerMin = if ($elapsedSeconds -gt 0) { ($receivedBytes / 1MB) / $elapsedSeconds * 60 } else { 0 }
-    $remainingBytes = [Math]::Max(0, $targetBytes - $receivedBytes)
+    $remainingBytes = $targetBytes - $receivedBytes
+    if ($remainingBytes -lt 0) { $remainingBytes = [int64]0 }
 
     if ($averageBytesPerSec -gt 0 -and $remainingBytes -gt 0) {
         $remainingSeconds = $remainingBytes / $averageBytesPerSec
