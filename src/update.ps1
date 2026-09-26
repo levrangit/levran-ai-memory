@@ -17,8 +17,9 @@ if ($LASTEXITCODE -ne 0) { throw "prepare.ps1 завершился с кодом
 & (Join-Path $root 'dump_config.ps1')
 if ($LASTEXITCODE -ne 0) { throw "dump_config.ps1 завершился с кодом $LASTEXITCODE." }
 
-# Архивирование 7z исключено.
-# dump-файлы передаются напрямую через rclone.
+& (Join-Path $root 'pack.ps1')
+if ($LASTEXITCODE -ne 0) { throw "pack.ps1 завершился с кодом $LASTEXITCODE." }
+
 & (Join-Path $root 'upload.ps1')
 if ($LASTEXITCODE -ne 0) { throw "upload.ps1 завершился с кодом $LASTEXITCODE." }
 
