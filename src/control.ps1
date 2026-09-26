@@ -122,7 +122,7 @@ while ($true) {
     }
 
     $line = "[{0}] [{1}] {2,6:N2}% | Файлов: {3:N0}/{4:N0} | Полных: {5:N0}/{4:N0} | Размер: {6} / {7} | {8:N1} MB/мин | SHA256: {9:N0}/{10:N0} | Осталось: {11} | Конец: {12}" -f $now.ToString("HH:mm:ss"), $progressBar, $percent, $receivedArchives, $targetArchives, $completeArchives, (Format-Bytes $receivedBytes), (Format-Bytes $targetBytes), $mbPerMin, $shaCount, $targetSha256, $remainingText, $finishText
-    Write-Host $line
+    Write-Host ("`r" + $line) -NoNewline
 
     if ($receivedBytes -ge $targetBytes -and $completeArchives -eq $targetArchives -and $shaCount -ge $targetSha256) {
         Write-Host ""
