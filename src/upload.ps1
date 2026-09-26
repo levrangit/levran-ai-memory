@@ -86,7 +86,7 @@ $manifestArchives = @(
             Name       = $file.Name
             Length     = [int64]$file.Length
             SizeBytes  = [int64]$file.Length
-            Sha256File = ($file.Name + '.sha256')
+            Sha256File = (([IO.Path]::ChangeExtension($file.Name, '.sha256')))
         }
     }
 )
