@@ -2,15 +2,22 @@
 
 $path = Read-Host "Введите путь к папке назначения"
 
-$targetFiles = [int](Read-Host "Введите общее количество файлов в источнике")
+$targetArchives = [int](Read-Host "Введите общее количество архивов (.7z) в источнике")
 
-if ($targetFiles -le 0) {
-    Write-Host "Количество файлов должно быть больше 0."
+if ($targetArchives -le 0) {
+    Write-Host "Количество архивов должно быть больше 0."
+    exit 1
+}
+
+if (-not (Test-Path -LiteralPath $path -PathType Container)) {
+    Write-Host "Папка назначения не найдена: $path"
     exit 1
 }
 
 Write-Host ""
-Write-Host "Начинаю мониторинг..."
+Write-Host "Контроль получения архивов..."
+Write-Host "Учитываются только файлы *.7z."
+Write-Host "Файлы *.sha256 контролируются отдельно."
 Write-Host "Для остановки нажмите Ctrl+C."
 Write-Host ""
 
@@ -19,32 +26,37 @@ $previousCount = 0
 $previousBytes = 0
 $previousTime = $startTime
 
-$averageFilesPerSec = 0
+$averageArchivesPerSec = 0
 $averageBytesPerSec = 0
 
 while ($true) {
-    $files = @(Get-ChildItem -LiteralPath $path -Recurse -File -ErrorAction SilentlyContinue)
-    $count = $files.Count
-    $bytes = ($files | Measure-Object Length -Sum).Sum
+    $archives = @(Get-ChildItem -LiteralPath $path -Filter "*.7z" -File -ErrorAction SilentlyContinue)
+
+    $count = $archives.Count
+    $bytes = ($archives | Measure-Object Length -Sum).Sum
 
     if ($null -eq $bytes) {
         $bytes = 0
     }
 
+    $shaFiles = @(Get-ChildItem -LiteralPath $path -Filter "*.sha256" -File -ErrorAction SilentlyContinue)
+    $shaCount = $shaFiles.Count
+
     $now = Get-Date
     $deltaSeconds = ($now - $previousTime).TotalSeconds
 
     if ($deltaSeconds -gt 0) {
-        $deltaFiles = $count - $previousCount
+        $deltaArchives = $count - $previousCount
         $deltaBytes = $bytes - $previousBytes
-        $currentFilesPerSec = $deltaFiles / $deltaSeconds
+
+        $currentArchivesPerSec = $deltaArchives / $deltaSeconds
         $currentBytesPerSec = $deltaBytes / $deltaSeconds
 
-        if ($averageFilesPerSec -eq 0) {
-            $averageFilesPerSec = $currentFilesPerSec
+        if ($averageArchivesPerSec -eq 0) {
+            $averageArchivesPerSec = $currentArchivesPerSec
         }
         else {
-            $averageFilesPerSec = ($averageFilesPerSec * 0.8) + ($currentFilesPerSec * 0.2)
+            $averageArchivesPerSec = ($averageArchivesPerSec * 0.8) + ($currentArchivesPerSec * 0.2)
         }
 
         if ($averageBytesPerSec -eq 0) {
@@ -59,7 +71,7 @@ while ($true) {
     $previousBytes = $bytes
     $previousTime = $now
 
-    $percent = ($count / $targetFiles) * 100
+    $percent = ($count / $targetArchives) * 100
 
     if ($percent -gt 100) {
         $percent = 100
@@ -82,29 +94,29 @@ while ($true) {
     $elapsedSeconds = ($now - $startTime).TotalSeconds
 
     if ($elapsedSeconds -gt 0) {
-        $filesPerMin = $count / $elapsedSeconds * 60
+        $archivesPerMin = $count / $elapsedSeconds * 60
         $mbPerMin = ($bytes / 1MB) / $elapsedSeconds * 60
     }
     else {
-        $filesPerMin = 0
+        $archivesPerMin = 0
         $mbPerMin = 0
     }
 
-    $remainingFiles = $targetFiles - $count
+    $remainingArchives = $targetArchives - $count
 
-    if ($remainingFiles -lt 0) {
-        $remainingFiles = 0
+    if ($remainingArchives -lt 0) {
+        $remainingArchives = 0
     }
 
-    if ($averageFilesPerSec -gt 0 -and $remainingFiles -gt 0) {
-        $remainingSeconds = $remainingFiles / $averageFilesPerSec
+    if ($averageArchivesPerSec -gt 0 -and $remainingArchives -gt 0) {
+        $remainingSeconds = $remainingArchives / $averageArchivesPerSec
         $remainingTime = [TimeSpan]::FromSeconds($remainingSeconds)
         $finishTime = $now.AddSeconds($remainingSeconds)
 
         $remainingText = "{0} ч {1} мин" -f [int]$remainingTime.TotalHours, $remainingTime.Minutes
         $finishText = $finishTime.ToString("HH:mm:ss")
     }
-    elseif ($count -ge $targetFiles) {
+    elseif ($count -ge $targetArchives) {
         $remainingText = "ЗАВЕРШЕНО"
         $finishText = $now.ToString("HH:mm:ss")
     }
@@ -113,26 +125,28 @@ while ($true) {
         $finishText = "--:--:--"
     }
 
-    $line = "[{0}] [{1}] {2,6:N2}% | Файлов: {3:N0}/{4:N0} | Размер: {5:N2} MB | {6:N1} файлов/мин | {7:N1} MB/мин | Осталось: {8} | Конец: {9}" -f `
+    $line = "[{0}] [{1}] {2,6:N2}% | Архивов: {3:N0}/{4:N0} | Размер: {5:N2} MB | {6:N1} архивов/мин | {7:N1} MB/мин | SHA256: {8:N0} | Осталось: {9} | Конец: {10}" -f `
         $now.ToString("HH:mm:ss"), `
         $progressBar, `
         $percent, `
         $count, `
-        $targetFiles, `
+        $targetArchives, `
         ($bytes / 1MB), `
-        $filesPerMin, `
+        $archivesPerMin, `
         $mbPerMin, `
+        $shaCount, `
         $remainingText, `
         $finishText
 
     Write-Host "`r$line" -NoNewline
 
-    if ($count -ge $targetFiles) {
+    if ($count -ge $targetArchives) {
         Write-Host ""
         Write-Host ""
-        Write-Host "Копирование завершено."
-        Write-Host ("Файлов: {0:N0}" -f $count)
-        Write-Host ("Размер: {0:N2} MB" -f ($bytes / 1MB))
+        Write-Host "Получение архивов завершено."
+        Write-Host ("Архивов .7z: {0:N0}" -f $count)
+        Write-Host ("Файлов .sha256: {0:N0}" -f $shaCount)
+        Write-Host ("Размер архивов: {0:N2} MB" -f ($bytes / 1MB))
         Write-Host ("Время завершения: {0}" -f $now.ToString("HH:mm:ss"))
         break
     }
