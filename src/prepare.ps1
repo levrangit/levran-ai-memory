@@ -23,7 +23,10 @@ if ([string]::IsNullOrWhiteSpace($mcpPath)) { throw "В common.json не зад�
 if (-not (Test-Path -LiteralPath $rdpDrive)) { throw "RDP-диск недоступен: $rdpDrive" }
 
 $rdpMcp = Join-Path $rdpDrive $mcpPath
+$rdpControl = Join-Path $rdpMcp 'control'
+New-Item -ItemType Directory -Force -Path $rdpControl | Out-Null
 Write-Host "MCP на RDP-диске: $rdpMcp"
+Write-Host "Control на RDP-диске: $rdpControl"
 
 $computer = $env:COMPUTERNAME
 $terminalPath = Join-Path (Join-Path $configDir 'terminals') ($computer + '.json')
