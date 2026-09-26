@@ -116,9 +116,13 @@ while ($true) {
         $remainingText = "{0} ч {1} мин" -f [int]$remainingTime.TotalHours, $remainingTime.Minutes
         $finishText = $finishTime.ToString("HH:mm:ss")
     }
-    elseif ($count -ge $targetArchives) {
+    elseif ($count -ge $targetArchives -and $shaCount -ge $targetArchives) {
         $remainingText = "ЗАВЕРШЕНО"
         $finishText = $now.ToString("HH:mm:ss")
+    }
+    elseif ($count -ge $targetArchives) {
+        $remainingText = "ожидание SHA256"
+        $finishText = "--:--:--"
     }
     else {
         $remainingText = "расчёт..."
@@ -140,10 +144,10 @@ while ($true) {
 
     Write-Host "`r$line" -NoNewline
 
-    if ($count -ge $targetArchives) {
+    if ($count -ge $targetArchives -and $shaCount -ge $targetArchives) {
         Write-Host ""
         Write-Host ""
-        Write-Host "Получение архивов завершено."
+        Write-Host "Получение архивов и SHA256 завершено."
         Write-Host ("Архивов .7z: {0:N0}" -f $count)
         Write-Host ("Файлов .sha256: {0:N0}" -f $shaCount)
         Write-Host ("Размер архивов: {0:N2} MB" -f ($bytes / 1MB))
